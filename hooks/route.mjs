@@ -13,7 +13,7 @@
 import {
   readStdinJson, extractPrompt, readState, updateState,
   modelFamily, modelFromWire, isComplexTask, shouldSuppress,
-  PROTOCOL_BLOCK_FLASH, PROTOCOL_BLOCK_PRO,
+  PROTOCOL_BLOCK_FLASH, PROTOCOL_BLOCK_PRO, CORRECTION_FLASH, CORRECTION_PRO,
   GUIDE_SIMPLE, GUIDE_DEEP, PROTOCOL_TAIL,
 } from '../lib/core.mjs'
 
@@ -54,16 +54,27 @@ const parts = []
 
 // First message of the session: protocol block (persona per family).
 const alreadyInjected = Boolean(rec && rec.personaInjected)
+const givenFamily = rec && typeof rec.family === 'string' ? rec.family : null
 if (!alreadyInjected && sid) {
   parts.push(family === 'pro' ? PROTOCOL_BLOCK_PRO : PROTOCOL_BLOCK_FLASH)
   try {
     updateState((s) => {
       const prev = s.sessions[sid] || {}
-      s.sessions[sid] = { ...prev, model: prev.model ?? null, personaInjected: true }
+      s.sessions[sid] = { ...prev, model: prev.model ?? null, personaInjected: true, family }
     })
   } catch {
     // state write failed — still inject, worst case it repeats next turn
   }
+} else if (sid && wireModel !== null && givenFamily !== null && family !== givenFamily) {
+  // The first block was chosen without wire evidence; the real serving model
+  // turned out to be the other family. Correct course once.
+  parts.push(family === 'pro' ? CORRECTION_PRO : CORRECTION_FLASH)
+  try {
+    updateState((s) => {
+      const prev = s.sessions[sid] || {}
+      s.sessions[sid] = { ...prev, family }
+    })
+  } catch {}
 }
 
 // Per-turn near-field guide (P21: suppress on continuation messages).
