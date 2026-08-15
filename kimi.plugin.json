@@ -1,0 +1,18 @@
+{
+  "name": "dsh-v4-router",
+  "version": "0.2.0",
+  "description": "Reasoning-mode router for DeepSeek V4 Flash/Pro: model-gated persona (w7/w6c) + Reasoning Protocol + per-turn near-field guidance (ports dsh-router-standard measured optimum).",
+  "keywords": ["deepseek", "v4-flash", "v4-pro", "reasoning-mode", "router"],
+  "license": "MIT",
+  "skills": "./skills/",
+  "commands": "./commands/",
+  "hooks": [
+    { "event": "SessionStart", "command": "node ./hooks/session-start.mjs", "timeout": 5 },
+    { "event": "UserPromptSubmit", "command": "node ./hooks/route.mjs", "timeout": 5 }
+  ],
+  "interface": {
+    "displayName": "DSH V4 Router",
+    "shortDescription": "Model-gated w7/w6c persona + Reasoning Protocol + near-field guidance for V4 Flash/Pro",
+    "longDescription": "Ports the measured dsh-router-standard optimum to kimi-code: SessionStart records the session model; per user message, a near-field hook injects a fixed guidance text (complexity-dispatched). Flash sessions get the w7 persona with recall/anti-runaway anchors (P23: 96% routing, 100% completion); Pro sessions get w6c (P24: 100% routing, zero anchors). A user-mandated Reasoning Protocol (English thinking, starts with \"We need...\") is enforced at the top. Three-state control: auto/on/off."
+  }
+}
