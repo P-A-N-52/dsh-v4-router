@@ -32,7 +32,7 @@ Kimi Code CLI 插件：DeepSeek V4 Flash/Pro 的推理模式路由器。
 2. 你每发一条消息，插件自动判断：
    - **DeepSeek V4 Flash**（模型名含 `deepseek`/`v4` + `flash`/`v4f`）→ 注入 w7 配方；
    - **DeepSeek V4 Pro**（含 `pro`/`v4p`）→ 注入 w6c 配方；
-   - **其他模型**（如 kimi-k3、gemini-*-flash）→ 完全静默，零影响；
+   - **其他模型**（如 kimi-k3、gemini-*-flash）→ 静默（以 wire 记录的真实服务模型为准）；
 3. 本会话第一条消息注入完整协议块（Reasoning Protocol + persona），之后每条消息注入一条固定引导（按任务复杂度二选一，缓存友好）；
 4. "继续" 这类续作消息自动跳过（实测：相关任务链上引导是负效果，P21）。
 
@@ -69,7 +69,7 @@ AGENTS.md               # 开发约定（改文本前先读）
 
 ## 已知限制
 
-- 用 `-m` 临时指定模型的会话，第一条消息时模型尚未可从 wire 确认，注入从第二条消息开始（协议块顺延，不丢）。
+- 门控以会话 wire 记录里的**真实服务模型**为准（SessionStart 事件只上报配置默认模型，看不到 `-m` 或会话内选择）。每会话**第一条消息**时 wire 尚未写盘、无证据可言，此时一律注入（fail-open 朝向插件目的；此时若会话实为 Pro 而默认模型非 v4，协议块会先按 Flash 配方给，属单次近似）；非 v4 会话从第二条消息起自动静默。想完全不受打扰用 `/dsh-v4-router:off`。
 - Reasoning Protocol 的强制全量开启是用户指定的实验项，超出上游实测的任务条件式用法；不适可 `/dsh-v4-router:off`。
 
 ## License

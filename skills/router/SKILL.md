@@ -11,12 +11,14 @@ Ports the measured optimums of [dsh-router-standard](https://github.com/yjh05110
 
 ```
 SessionStart hook          UserPromptSubmit hook (every user message)
-  session_id → model  ──►    auto mode: DeepSeek V4 family only (id must contain
-                             "deepseek" or "v4"; gemini-*-flash etc. stay silent)
-                             flash → w7 recipe | pro → w6c recipe (zero anchors)
-                             first message: PROTOCOL_BLOCK (Reasoning Protocol + persona)
+  session_id → model  ──►    model evidence: wire.jsonl tail (real serving model)
+                             wins; SessionStart only reports the config default.
+                             auto mode: wire says flash/v4f → w7 recipe |
+                             wire says pro/v4p → w6c recipe (zero anchors) |
+                             wire says non-V4 → silent |
+                             no wire yet (message #1) → fail-open inject
                              every message: GUIDE_SIMPLE | GUIDE_DEEP (+ protocol tail)
-                             continuation/short msgs: suppressed (P21)
+                             continuation/short msgs: guide suppressed (P21)
 ```
 
 ## Fixed texts (verbatim ports — do not reword)

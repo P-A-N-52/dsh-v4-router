@@ -32,19 +32,22 @@ const rec = sid ? state.sessions[sid] : undefined
 // mid-session switches). Wire wins; recorded default is the fallback.
 const recordedModel = rec && typeof rec.model === 'string' ? rec.model : null
 const wireModel = sid ? modelFromWire(sid) : null
-const effectiveModel = wireModel ?? recordedModel
 
 // Recipe selection.
 // - on:   force-enable; family from model, default flash.
-// - auto: known non-V4 model → silent; unknown model → fail-open as flash.
+// - auto: wire evidence (real serving model) decides strictly; on the FIRST
+//         message no wire exists yet — SessionStart only reports the config
+//         DEFAULT model, which cannot see a per-session pick, so we fail open
+//         toward injection (preferring a V4 hint when the default is one).
+//         From message #2 the wire corrects any wrong call.
 let family
 if (mode === 'on') {
-  family = modelFamily(effectiveModel) ?? 'flash'
-} else if (effectiveModel === null) {
-  family = 'flash'
+  family = modelFamily(wireModel ?? recordedModel) ?? 'flash'
+} else if (wireModel !== null) {
+  family = modelFamily(wireModel)
+  if (family === null) process.exit(0) // positive evidence: non-V4 model
 } else {
-  family = modelFamily(effectiveModel)
-  if (family === null) process.exit(0)
+  family = modelFamily(recordedModel) ?? 'flash'
 }
 
 const parts = []

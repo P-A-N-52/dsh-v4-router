@@ -24,7 +24,7 @@ skills/router/SKILL.md  # 机制说明
 ## 实测踩过的坑（kimi-code 0.36.1）
 
 - `UserPromptSubmit` 的 `prompt` 字段是**数组** `[{type:"text",text:...}]`，不是字符串。
-- `SessionStart` 上报的 `model` 是**配置默认模型**，不含 `-m` 覆盖 → 真实模型要从会话 wire.jsonl 尾部读（`lib/core.mjs` 的 `modelFromWire`）；首轮 wire 未写盘时注入顺延到第二条消息。
+- `SessionStart` 上报的 `model` 是**配置默认模型**，不含 `-m` 覆盖或 TUI 会话内选择 → 真实模型要从会话 wire.jsonl 尾部读（`lib/core.mjs` 的 `modelFromWire`）。第一条消息时 wire 未写盘、无任何可靠信号，此时按设计 fail-open 注入（宁滥勿缺；非 v4 会话从第二条起自动静默）。
 - hook 一律 fail-open：任何异常都必须静默 exit 0，不能阻断主流程。
 
 ## 开发 / 测试
