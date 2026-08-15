@@ -13,10 +13,12 @@ Ports the measured optimums of [dsh-router-standard](https://github.com/yjh05110
 SessionStart hook          UserPromptSubmit hook (every user message)
   session_id → model  ──►    model evidence: wire.jsonl tail (real serving model)
                              wins; SessionStart only reports the config default.
-                             auto mode: wire says flash/v4f → w7 recipe |
-                             wire says pro/v4p → w6c recipe (zero anchors) |
-                             wire says non-V4 → silent |
-                             no wire yet (message #1) → fail-open inject
+                             msg #1 (no wire): FIRST_BLOCK = Reasoning Protocol
+                             only (family-neutral — persona is DEFERRED, a wrong
+                             persona on turn 1 is the measured worst case)
+                             msg #2+: wire says flash/v4f → w7 persona block |
+                             wire says pro/v4p → w6c persona block (zero anchors) |
+                             wire says non-V4 → silent | family flip → 1 correction
                              every message: GUIDE_SIMPLE | GUIDE_DEEP (+ protocol tail)
                              continuation/short msgs: guide suppressed (P21)
 ```

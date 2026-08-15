@@ -1,19 +1,27 @@
 /**
  * UserPromptSubmit hook — the near-field injection point (position rule).
  *
- * Per real user message, prints ONE block to stdout (appended to context right
- * after the user message):
- *   - first message of the session: PROTOCOL_BLOCK (Reasoning Protocol + persona)
- *   - every non-continuation message: GUIDE_SIMPLE or GUIDE_DEEP + PROTOCOL_TAIL
+ * Per real user message, prints blocks to stdout (appended right after the
+ * user message):
+ *   - first message: FIRST_BLOCK (Reasoning Protocol only — family-neutral)
+ *   - once the wire reveals the model family: persona block (w7 / w6c)
+ *   - family flip mid-session: one correction block
+ *   - every non-continuation message: GUIDE_SIMPLE or GUIDE_DEEP + tail
  *
- * Gating: state.mode auto/on/off; auto selects the recipe by session model
- * (flash → w7, pro → w6c, other → silent). Fail-open everywhere.
+ * Why the persona is deferred: at message #1 there is NO reliable model
+ * signal (SessionStart reports the config default; the wire log is written
+ * when the first request starts — after this hook). Guessing the family can
+ * give the measured-worst persona to the wrong model, and path-commitment
+ * makes it stick. Near-field text arriving on turn 2 loses nothing (P14/P19).
+ *
+ * Gating: state.mode auto/on/off. Fail-open everywhere.
  */
 
 import {
   readStdinJson, extractPrompt, readState, updateState,
   modelFamily, modelFromWire, isComplexTask, shouldSuppress,
-  PROTOCOL_BLOCK_FLASH, PROTOCOL_BLOCK_PRO, CORRECTION_FLASH, CORRECTION_PRO,
+  FIRST_BLOCK, PERSONA_BLOCK_FLASH, PERSONA_BLOCK_PRO,
+  CORRECTION_FLASH, CORRECTION_PRO,
   GUIDE_SIMPLE, GUIDE_DEEP, PROTOCOL_TAIL,
 } from '../lib/core.mjs'
 
@@ -29,45 +37,49 @@ const sid = typeof payload.session_id === 'string' ? payload.session_id : null
 const rec = sid ? state.sessions[sid] : undefined
 // SessionStart reports the config DEFAULT model; the wire log carries the
 // model that actually served the last request (covers `-m` overrides and
-// mid-session switches). Wire wins; recorded default is the fallback.
+// mid-session switches). Wire is the only trustworthy evidence.
 const recordedModel = rec && typeof rec.model === 'string' ? rec.model : null
 const wireModel = sid ? modelFromWire(sid) : null
+const wireFamily = wireModel !== null ? modelFamily(wireModel) : null
 
-// Recipe selection.
-// - on:   force-enable; family from model, default flash.
-// - auto: wire evidence (real serving model) decides strictly; on the FIRST
-//         message no wire exists yet — SessionStart only reports the config
-//         DEFAULT model, which cannot see a per-session pick, so we fail open
-//         toward injection (preferring a V4 hint when the default is one).
-//         From message #2 the wire corrects any wrong call.
-let family
-if (mode === 'on') {
-  family = modelFamily(wireModel ?? recordedModel) ?? 'flash'
-} else if (wireModel !== null) {
-  family = modelFamily(wireModel)
-  if (family === null) process.exit(0) // positive evidence: non-V4 model
-} else {
-  family = modelFamily(recordedModel) ?? 'flash'
-}
+// Gating.
+// - on:   force-enable; family from any hint, default flash.
+// - auto: wire evidence of a non-V4 model → silent; no wire yet → proceed
+//         (family-neutral parts only, persona waits for evidence).
+if (mode === 'auto' && wireModel !== null && wireFamily === null) process.exit(0)
+
+const family =
+  wireFamily ??
+  (mode === 'on' ? modelFamily(recordedModel) ?? 'flash' : null)
 
 const parts = []
 
-// First message of the session: protocol block (persona per family).
-const alreadyInjected = Boolean(rec && rec.personaInjected)
+// Legacy sessions stored personaInjected; treat it as protocolGiven.
+const protocolGiven = Boolean(rec && (rec.protocolGiven ?? rec.personaInjected))
 const givenFamily = rec && typeof rec.family === 'string' ? rec.family : null
-if (!alreadyInjected && sid) {
-  parts.push(family === 'pro' ? PROTOCOL_BLOCK_PRO : PROTOCOL_BLOCK_FLASH)
+
+// First message: Reasoning Protocol (family-neutral, always safe).
+if (!protocolGiven && sid) {
+  parts.push(FIRST_BLOCK)
   try {
     updateState((s) => {
       const prev = s.sessions[sid] || {}
-      s.sessions[sid] = { ...prev, model: prev.model ?? null, personaInjected: true, family }
+      s.sessions[sid] = { ...prev, model: prev.model ?? null, protocolGiven: true }
     })
-  } catch {
-    // state write failed — still inject, worst case it repeats next turn
-  }
-} else if (sid && wireModel !== null && givenFamily !== null && family !== givenFamily) {
-  // The first block was chosen without wire evidence; the real serving model
-  // turned out to be the other family. Correct course once.
+  } catch {}
+}
+
+// Persona: only once the family is KNOWN (wire evidence, or a hint in on-mode).
+if (sid && family !== null && givenFamily === null) {
+  parts.push(family === 'pro' ? PERSONA_BLOCK_PRO : PERSONA_BLOCK_FLASH)
+  try {
+    updateState((s) => {
+      const prev = s.sessions[sid] || {}
+      s.sessions[sid] = { ...prev, family }
+    })
+  } catch {}
+} else if (sid && family !== null && givenFamily !== null && family !== givenFamily) {
+  // Mid-session model switch: correct course once.
   parts.push(family === 'pro' ? CORRECTION_PRO : CORRECTION_FLASH)
   try {
     updateState((s) => {
